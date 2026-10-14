@@ -39,9 +39,7 @@ def _run(legacy: ModuleType, tmp_path: Path, lines: list[str]) -> list[str]:
 def test_legacy_five_failures_same_ip_raise_one_alert(legacy: ModuleType, tmp_path: Path) -> None:
     lines = [FAILED.format(user="root", ip="10.0.0.66")] * 6
     assert _run(legacy, tmp_path, lines) == ["10.0.0.66"]
-    assert legacy.DB.execute("SELECT ip, user FROM incidents").fetchall() == [
-        ("10.0.0.66", "root")
-    ]
+    assert legacy.DB.execute("SELECT ip, user FROM incidents").fetchall() == [("10.0.0.66", "root")]
 
 
 def test_legacy_failures_spread_over_ips_raise_nothing(legacy: ModuleType, tmp_path: Path) -> None:

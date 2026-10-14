@@ -1,4 +1,4 @@
-"""Règles de détection : Strategy (une classe par règle), Composite (RuleSet), Factory (build_rule)."""
+"""Règles de détection : Strategy (une classe par règle), Composite, Factory (build_rule)."""
 
 from __future__ import annotations
 
