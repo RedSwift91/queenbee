@@ -26,6 +26,17 @@ qui n'existent pas encore : `AuditedNotifier`, `RateLimitedNotifier`, `response`
 `IncidentService`, `Principal`, `agent_api`, `threat_feed`. Ce n'est pas une régression : c'est le
 travail du 15 octobre. Les tests fournis n'ont pas été modifiés.
 
+Pour la même raison, `python -m pytest -k secret` s'interrompt : pytest importe tous les fichiers
+avant de filtrer par nom. Les tests « secret » du J1 se lancent ainsi :
+
+```powershell
+python -m pytest tests/test_j1_group.py -k secret     # test_secret_never_in_str_or_repr
+```
+
+Le test fourni `test_adapters.py::test_secret_never_printed` passera dès que le fichier pourra être
+importé (J2). Le comportement qu'il vérifie est déjà en place :
+`print(SettingsBuilder().hmac_key(cle).build())` affiche `Settings(db_path=':memory:', bf_threshold=5)`.
+
 ## Choix à signaler
 
 - `pyproject.toml` : ajout de `known-first-party = ["queenbee", "tests"]` pour ruff (isort). Sans ce
