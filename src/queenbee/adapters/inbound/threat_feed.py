@@ -24,4 +24,4 @@ class ThreatFeedTranslator:
         indicator = raw.get("indicator")
         if not isinstance(indicator, str):
             raise DomainError("indicateur absent")
-        return ThreatIndicator(indicator, _SCORES[level.lower()])  # le domaine vérifie que c'est une IP
+        return ThreatIndicator(indicator, _SCORES[level.lower()])  # le domaine vérifie l'IP

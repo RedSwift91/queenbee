@@ -121,9 +121,7 @@ class Principal:
     def __post_init__(self) -> None:
         if not isinstance(self.user, str) or not USERNAME_RE.fullmatch(self.user):
             raise DomainError("identifiant d'utilisateur invalide")
-        if not isinstance(self.roles, frozenset) or not all(
-            isinstance(r, str) for r in self.roles
-        ):
+        if not isinstance(self.roles, frozenset) or not all(isinstance(r, str) for r in self.roles):
             raise DomainError("les rôles doivent être un frozenset de textes")
 
     def has(self, role: str) -> bool:
