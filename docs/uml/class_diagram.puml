@@ -1,0 +1,155 @@
+@startuml class_diagram
+title Queen Bee — Diagramme de classes (fin J2) : couches et patterns défensifs
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+package "domain (aucune dépendance technique)" {
+  class SecurityEvent <<frozen>> {
+    source_ip : str
+    username : str
+    action : str
+    timestamp : datetime
+  }
+  class Alert <<frozen>> {
+    rule : str
+    source_ip : str
+    severity : Severity
+    message : str
+  }
+  class Incident <<State>> {
+    alert : Alert
+    id : UUID
+    status : IncidentStatus
+    transition_to(new)
+  }
+  enum IncidentStatus {
+    OPEN
+    TRIAGED
+    CONTAINED
+    CLOSED
+  }
+  class Principal <<frozen>> {
+    user : str
+    roles : frozenset[str]
+    has(role) : bool
+  }
+  class ThreatIndicator <<frozen>> {
+    ip : str
+    score : int
+  }
+  interface DetectionRule <<Strategy>> {
+    evaluate(events) : list[Alert]
+  }
+  class BruteForceRule <<frozen>>
+  class PortScanRule <<frozen>>
+  class RuleSet <<Composite>>
+  class build_rule << (F,#FFD27F) Factory >>
+}
+
+package "application" {
+  interface IncidentRepository <<port>> {
+    add(incident)
+    get(id) : Incident | None
+    save(incident)
+    list_open() : list[Incident]
+  }
+  interface Notifier <<port>> {
+    notify(alert)
+  }
+  interface Firewall <<port>> {
+    block(ip)
+    unblock(ip)
+  }
+  class DetectionService {
+    ingest(events) : list[Incident]
+  }
+  class IncidentService {
+    move(who, incident_id, to) : Incident
+  }
+  class IncidentReadProxy <<Proxy>> {
+    denied : int
+  }
+}
+
+package "adapters.inbound" {
+  class parse_sshd_line << (F,#FFD27F) Adapter >>
+  class parse_agent_message << (F,#FFD27F) Adapter >>
+  class ThreatFeedTranslator <<Anti-corruption>> {
+    translate(raw) : ThreatIndicator
+  }
+}
+
+package "adapters.outbound" {
+  class InMemoryIncidentRepository
+  class SqliteIncidentRepository
+  class MemoryNotifier
+  class LogNotifier
+  class AuditedNotifier <<Decorator>>
+  class RateLimitedNotifier <<Decorator>> {
+    dropped : int
+  }
+  class AlertBroadcaster <<Observer>> {
+    failures : int
+    subscribe(notifier)
+  }
+  class InMemoryFirewall
+  class BlockIpCommand <<Command>> {
+    execute()
+    undo()
+  }
+  class CommandHistory {
+    run(command)
+    undo_last()
+  }
+}
+
+class QueenBee <<Facade>> {
+  rejected : int
+  ingest_lines(lines)
+  ingest_agent_messages(messages)
+  move_incident(who, id, to)
+}
+
+' --- domaine
+DetectionRule <|.. BruteForceRule
+DetectionRule <|.. PortScanRule
+DetectionRule <|.. RuleSet
+RuleSet o-- "*" DetectionRule
+Incident *-- Alert
+Incident --> IncidentStatus
+build_rule ..> DetectionRule : crée depuis un registre fermé
+
+' --- application
+DetectionService --> DetectionRule
+DetectionService --> IncidentRepository
+DetectionService --> "*" Notifier
+IncidentService --> IncidentRepository
+IncidentService ..> Principal : autorise
+IncidentReadProxy ..|> IncidentRepository
+IncidentReadProxy --> IncidentRepository : délègue
+
+' --- adapters
+IncidentRepository <|.. InMemoryIncidentRepository
+IncidentRepository <|.. SqliteIncidentRepository
+Notifier <|.. MemoryNotifier
+Notifier <|.. LogNotifier
+Notifier <|.. AuditedNotifier
+Notifier <|.. RateLimitedNotifier
+Notifier <|.. AlertBroadcaster
+AuditedNotifier --> Notifier : enveloppe
+RateLimitedNotifier --> Notifier : enveloppe
+AlertBroadcaster --> "*" Notifier : abonnés
+Firewall <|.. InMemoryFirewall
+BlockIpCommand --> Firewall
+CommandHistory o-- "*" BlockIpCommand
+parse_sshd_line ..> SecurityEvent : produit
+parse_agent_message ..> SecurityEvent : produit
+ThreatFeedTranslator ..> ThreatIndicator : traduit
+
+' --- démarrage
+QueenBee --> DetectionService
+QueenBee --> IncidentService
+QueenBee ..> parse_sshd_line
+QueenBee ..> parse_agent_message
+@enduml
