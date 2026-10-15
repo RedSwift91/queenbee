@@ -1,0 +1,27 @@
+@startuml c4_context
+!include <C4/C4_Context>
+title Queen Bee — Contexte (C4 niveau 1)
+
+Person(analyst, "Analyste SOC", "Trie, confine et clôt les incidents")
+Person(viewer, "Lecteur", "Consulte les incidents, sans les modifier")
+Person(admin, "Administrateur", "Déploie, configure les règles et les secrets")
+
+System(qb, "Queen Bee", "Valide les événements de sécurité, détecte les attaques, ouvre et trace les incidents")
+
+System_Ext(agent, "Agents (abeilles)", "Lisent les journaux sshd sur les hôtes surveillés")
+System_Ext(feed, "Flux de menaces", "Fournisseur externe d'indicateurs (IP malveillantes)")
+System_Ext(firewall, "Pare-feu", "Bloque les IP sur décision d'un analyste")
+System_Ext(siem, "SIEM / journal d'audit", "Conserve les traces de qui a fait quoi")
+System_Ext(mail, "Messagerie du SOC", "Reçoit les alertes")
+
+Rel(agent, qb, "Événements signés HMAC, 4 Kio max", "HTTPS")
+Rel(feed, qb, "Indicateurs, traduits par la couche anti-corruption", "HTTPS")
+Rel(analyst, qb, "Traite les incidents", "HTTPS + MFA")
+Rel(viewer, qb, "Consulte les incidents", "HTTPS + MFA")
+Rel(admin, qb, "Configure (clé, seuils)", "variables d'environnement")
+Rel(qb, firewall, "Bloque / débloque une IP validée", "API d'administration")
+Rel(qb, mail, "Alertes limitées à 3 par minute", "SMTP TLS")
+Rel(qb, siem, "Audit des alertes et des changements d'état", "syslog TLS")
+
+SHOW_LEGEND()
+@enduml
