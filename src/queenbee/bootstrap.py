@@ -3,23 +3,34 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from uuid import UUID
 
+from queenbee.adapters.inbound.agent_api import UnauthenticatedError, parse_agent_message
 from queenbee.adapters.inbound.log_parser import parse_sshd_line
+from queenbee.adapters.outbound.notifiers import AuditedNotifier, RateLimitedNotifier
 from queenbee.application.ports import IncidentRepository
-from queenbee.application.services import DetectionService
+from queenbee.application.services import DetectionService, IncidentService
 from queenbee.config import Settings
-from queenbee.domain.model import DomainError, Incident, SecurityEvent
+from queenbee.domain.model import DomainError, Incident, IncidentStatus, Principal, SecurityEvent
 from queenbee.domain.rules import BruteForceRule, PortScanRule, RuleSet
 from queenbee.factories import ComponentFactory, ProdFactory
 
 
 class QueenBee:
-    """Facade : un point d'entrée simple devant le parser, la détection et le dépôt."""
+    """Facade : une seule porte d'entrée devant les parsers, la détection et les incidents."""
 
-    def __init__(self, detection: DetectionService, repository: IncidentRepository) -> None:
+    def __init__(
+        self,
+        detection: DetectionService,
+        incidents: IncidentService,
+        repository: IncidentRepository,
+        agent_key: bytes,
+    ) -> None:
         self._detection = detection
+        self._incidents = incidents
         self._repository = repository
-        self.rejected = 0
+        self._agent_key = agent_key
+        self.rejected = 0  # lignes ou messages refusés : toujours comptés
 
     def ingest_lines(self, lines: Iterable[str]) -> list[Incident]:
         events: list[SecurityEvent] = []
@@ -30,6 +41,18 @@ class QueenBee:
                 self.rejected += 1
         return self._detection.ingest(events)
 
+    def ingest_agent_messages(self, messages: Iterable[tuple[bytes, str]]) -> list[Incident]:
+        events: list[SecurityEvent] = []
+        for body, signature in messages:
+            try:
+                events.append(parse_agent_message(body, signature, self._agent_key))
+            except (DomainError, UnauthenticatedError):
+                self.rejected += 1
+        return self._detection.ingest(events)
+
+    def move_incident(self, who: Principal, incident_id: UUID, to: IncidentStatus) -> Incident:
+        return self._incidents.move(who, incident_id, to)
+
     def open_incidents(self) -> list[Incident]:
         return self._repository.list_open()
 
@@ -38,5 +61,6 @@ def build_app(settings: Settings, factory: ComponentFactory | None = None) -> Qu
     factory = ProdFactory(settings.db_path) if factory is None else factory
     repository = factory.repository()
     rules = RuleSet((BruteForceRule(settings.bf_threshold), PortScanRule()))
-    detection = DetectionService(rules, repository, [factory.notifier()])
-    return QueenBee(detection, repository)
+    notifier = AuditedNotifier(RateLimitedNotifier(factory.notifier()))
+    detection = DetectionService(rules, repository, [notifier])
+    return QueenBee(detection, IncidentService(repository), repository, settings.hmac_key)
