@@ -23,7 +23,7 @@ class AccessDeniedError(Exception):
 
 
 def require(who: Principal, roles: frozenset[str], action: str) -> None:
-    if not who.roles & roles:
+    if not any(who.has(role) for role in roles):
         _audit.warning("accès refusé : %s a tenté de %s", who.user, action)
         raise AccessDeniedError(who.user, action)
 
