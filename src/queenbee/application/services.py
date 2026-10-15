@@ -19,6 +19,8 @@ _audit = logging.getLogger("queenbee.audit")
 class DetectionService:
     """Évalue les événements, ouvre un incident par alerte et prévient les notificateurs."""
 
+    # Inversion de dépendances (D de SOLID) : tout est reçu, rien n'est créé ici. Le service ne
+    # sait pas s'il parle à SQLite ou à un dictionnaire en mémoire : il ne connaît que les ports.
     def __init__(
         self,
         rule: DetectionRule,
@@ -47,6 +49,8 @@ class IncidentService:
         self._incidents = incidents
 
     def move(self, who: Principal, incident_id: UUID, to: IncidentStatus) -> Incident:
+        # L'ordre compte : autoriser AVANT de chercher l'incident, sinon un lecteur pourrait
+        # deviner quels identifiants existent (réponse « introuvable » contre « refusé »).
         require(who, ANALYST, "changer le statut d'un incident")  # 1. autoriser
         incident = self._incidents.get(incident_id)
         if incident is None:  # 2. vérifier

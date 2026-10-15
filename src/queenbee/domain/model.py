@@ -10,6 +10,8 @@ from enum import Enum, IntEnum
 from types import MappingProxyType
 from uuid import UUID, uuid4
 
+# Allowlists : on décrit ce qui est autorisé ; tout le reste est refusé (plus sûr qu'une
+# liste noire, car on ne peut pas deviner toutes les attaques).
 USERNAME_RE = re.compile(r"[A-Za-z0-9._-]{1,32}")
 ALLOWED_ACTIONS = frozenset({"login_failed", "login_ok", "port_probe"})
 MAX_RULE_NAME = 64
@@ -39,6 +41,8 @@ class Severity(IntEnum):
     CRITICAL = 4
 
 
+# frozen : impossible de modifier l'objet après sa création (e.source_ip = ... lève une erreur).
+# slots : impossible d'ajouter un attribut imprévu en douce.
 @dataclass(frozen=True, slots=True)
 class SecurityEvent:
     """Un événement remonté par un agent. Un SecurityEvent invalide ne peut pas être construit."""
@@ -49,11 +53,14 @@ class SecurityEvent:
     timestamp: datetime
 
     def __post_init__(self) -> None:
+        # Appelé automatiquement à la création : si on sort d'ici, l'objet est valide, et il le
+        # restera (frozen). Le reste du code n'a donc jamais besoin de revérifier.
         check_ip(self.source_ip)
         if not isinstance(self.username, str) or not USERNAME_RE.fullmatch(self.username):
             raise DomainError("nom d'utilisateur hors allowlist")
         if self.action not in ALLOWED_ACTIONS:
             raise DomainError("action inconnue")
+        # Sans fuseau, on ne peut pas comparer des événements venant de machines différentes.
         if not isinstance(self.timestamp, datetime) or self.timestamp.utcoffset() is None:
             raise DomainError("horodatage sans fuseau")
 
@@ -72,6 +79,8 @@ class Alert:
             raise DomainError("nom de règle invalide")
         check_ip(self.source_ip)
         try:
+            # frozen interdit self.severity = ... ; object.__setattr__ est la seule façon de
+            # normaliser une valeur pendant la création (3 devient Severity.HIGH).
             object.__setattr__(self, "severity", Severity(self.severity))
         except ValueError as exc:
             raise DomainError("gravité inconnue") from exc
@@ -97,6 +106,8 @@ _TRANSITIONS: MappingProxyType[IncidentStatus, frozenset[IncidentStatus]] = Mapp
 )
 
 
+# Pattern State. Pas frozen : le statut doit pouvoir changer, mais seulement par transition_to(),
+# qui consulte la table ci-dessus.
 @dataclass(slots=True)
 class Incident:
     """Incident ouvert à partir d'une alerte ; son statut ne change que par transition_to()."""

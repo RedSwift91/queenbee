@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS incident (
     status TEXT NOT NULL
 )
 """
+# Les ? sont remplis par sqlite3 lui-même, séparément du texte de la requête : une donnée
+# comme « x'); DROP TABLE incident;-- » reste une donnée et ne devient jamais du SQL.
 _INSERT = (
     "INSERT INTO incident (id, rule, source_ip, severity, message, status) "
     "VALUES (?, ?, ?, ?, ?, ?)"
@@ -58,7 +60,7 @@ class SqliteIncidentRepository:
     def add(self, incident: Incident) -> None:
         a = incident.alert
         try:
-            with self._conn:
+            with self._conn:  # transaction : validée si tout passe, annulée en cas d'erreur
                 self._conn.execute(
                     _INSERT,
                     (

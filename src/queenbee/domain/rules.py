@@ -13,6 +13,8 @@ from queenbee.domain.model import Alert, DomainError, SecurityEvent, Severity
 MAX_THRESHOLD = 10_000
 
 
+# Protocol : toute classe qui possède une méthode evaluate() avec cette signature convient,
+# sans avoir à hériter de quoi que ce soit (typage « structurel », vérifié par mypy).
 class DetectionRule(Protocol):
     def evaluate(self, events: Sequence[SecurityEvent]) -> list[Alert]: ...
 
@@ -73,7 +75,9 @@ class RuleSet:
         return [alert for rule in self.rules for alert in rule.evaluate(events)]
 
 
-# Seuls ces noms peuvent être créés depuis une configuration externe (jamais getattr/importlib).
+# Seuls ces noms peuvent être créés depuis une configuration externe (jamais getattr/importlib,
+# qui laisseraient la config choisir n'importe quelle classe, comme os.system).
+# MappingProxyType : dictionnaire en lecture seule, personne ne peut y ajouter une entrée.
 _REGISTRY: Mapping[str, Callable[..., DetectionRule]] = MappingProxyType(
     {"brute_force": BruteForceRule, "port_scan": PortScanRule}
 )

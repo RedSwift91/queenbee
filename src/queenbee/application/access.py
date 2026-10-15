@@ -22,6 +22,8 @@ class AccessDeniedError(Exception):
         self.user = user
 
 
+# Le contrôle est fait dans l'application, pas dans l'interface : une nouvelle interface (API,
+# ligne de commande...) qui oublierait de vérifier le rôle ne pourrait pas le contourner.
 def require(who: Principal, roles: frozenset[str], action: str) -> None:
     if not any(who.has(role) for role in roles):
         _audit.warning("accès refusé : %s a tenté de %s", who.user, action)

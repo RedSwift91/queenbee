@@ -43,7 +43,7 @@ class SettingsBuilder:
         self._db_path = ":memory:"
         self._bf_threshold = 5
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # réécrit pour que la clé n'apparaisse pas non plus ici
         return f"SettingsBuilder(db_path={self._db_path!r}, bf_threshold={self._bf_threshold!r})"
 
     def hmac_key(self, key: bytes) -> Self:
@@ -59,6 +59,8 @@ class SettingsBuilder:
         return self
 
     def build(self) -> Settings:
+        # Toute la validation a lieu ici et dans Settings.__post_init__, jamais au fil des
+        # appels précédents : on ne livre pas un objet à moitié contrôlé.
         if self._hmac_key is None:
             raise ConfigError("clé HMAC des agents manquante")
         return Settings(self._hmac_key, self._db_path, self._bf_threshold)

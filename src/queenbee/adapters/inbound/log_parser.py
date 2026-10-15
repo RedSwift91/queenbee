@@ -28,4 +28,6 @@ def parse_sshd_line(line: str) -> SecurityEvent:
         timestamp = datetime.fromisoformat(match["ts"])
     except ValueError as exc:
         raise DomainError("horodatage invalide") from exc
+    # Deuxième contrôle : le domaine revalide (vraie IP, fuseau présent). Une regex ne suffit pas
+    # à elle seule : « 999.1.1.1 » passe la regex mais pas ipaddress.
     return SecurityEvent(match["ip"], match["user"], _ACTIONS[match["verdict"]], timestamp)

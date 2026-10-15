@@ -61,6 +61,7 @@ def build_app(settings: Settings, factory: ComponentFactory | None = None) -> Qu
     factory = ProdFactory(settings.db_path) if factory is None else factory
     repository = factory.repository()
     rules = RuleSet((BruteForceRule(settings.bf_threshold), PortScanRule()))
+    # Audit à l'extérieur : chaque alerte est tracée, même celles que le limiteur écartera ensuite.
     notifier = AuditedNotifier(RateLimitedNotifier(factory.notifier()))
     detection = DetectionService(rules, repository, [notifier])
     return QueenBee(detection, IncidentService(repository), repository, settings.hmac_key)

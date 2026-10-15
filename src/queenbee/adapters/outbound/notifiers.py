@@ -36,6 +36,9 @@ class LogNotifier:
         )
 
 
+# Decorator : chaque classe ci-dessous a la même méthode notify() que le Notifier qu'elle
+# enveloppe. On peut donc les empiler (audit autour de limite autour de mail) sans que
+# DetectionService voie la différence.
 class AuditedNotifier:
     """Decorator : trace chaque alerte dans le journal d'audit, puis délègue."""
 

@@ -13,6 +13,8 @@ from queenbee.adapters.outbound.repositories import (
 from queenbee.application.ports import IncidentRepository, Notifier
 
 
+# Les deux fabriques respectent ce contrat : le reste du code (bootstrap, tests) ne sait pas
+# laquelle il reçoit, et ne peut pas mélanger une vraie base avec une fausse notification.
 class ComponentFactory(Protocol):
     def repository(self) -> IncidentRepository: ...
 
