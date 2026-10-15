@@ -48,6 +48,7 @@ flowchart LR
     end
     FW[[Pare-feu]]
     SOC((Analyste SOC))
+    FEED[[Flux de menaces externe]]
 
     LOG -->|lignes de log| AG
     AG -->|"événements signés (TB1)"| IN
@@ -59,6 +60,7 @@ flowchart LR
     INC -->|"statut (TB2)"| DB
     INC -->|"bloquer IP (TB3)"| FW
     CFG -->|"clé HMAC, seuils (TB6)"| APP
+    FEED -->|"indicateurs (TB7)"| DET
 ```
 
 | Frontière | Entre | Pourquoi c'est une frontière |
@@ -69,6 +71,7 @@ flowchart LR
 | **TB4** | analyste → application | des humains avec des rôles différents ; il faut vérifier les droits à chaque action |
 | **TB5** | application → canal d'alerte | sortie vers un système tiers (mail) qui peut être saturé ou recevoir des données sensibles |
 | **TB6** | environnement → configuration | les secrets et seuils viennent de l'extérieur du code |
+| **TB7** (ajout J2) | flux de menaces externe → application | un fournisseur tiers, avec son propre vocabulaire et ses propres erreurs ; ses données ne doivent pas entrer telles quelles dans le domaine |
 
 ## 4. STRIDE par flux traversant une frontière
 
@@ -80,6 +83,8 @@ flowchart LR
 | Application → Pare-feu (TB3) | — | IP piégée `10.0.0.1; iptables -F` | blocage non tracé | — | blocage d'une IP légitime | injection de commande | J2 (`test_command_undo`) |
 | Détection → Alerte (TB5) | — | — | alerte non tracée | secret ou donnée sensible dans le mail | flood d'alertes qui noie le SOC | — | EX-07, J2 (`RateLimitedNotifier`) |
 | Config → Application (TB6) | — | règle inconnue ou seuil `True` injecté par la config | — | clé affichée dans un `print` ou une trace | démarrage avec une clé vide | — | EX-05, EX-08 |
+| Flux de menaces → Détection (TB7, ajout J2) | faux fournisseur | indicateur qui n'est pas une IP (`evil.com`), niveau de risque inventé | — | — | — | — | EX-09 |
+| Alerte → abonnés (TB5, ajout J2) | — | — | — | — | un abonné en panne bloque la diffusion aux autres | — | Observer `AlertBroadcaster` (`test_abuse_broken_subscriber_does_not_block_others`) |
 
 Menaces écartées comme peu crédibles pour ce périmètre : l'usurpation de la base (processus local, même hôte) et la répudiation côté agent (un agent compromis est traité par la révocation de sa clé, hors code).
 
@@ -135,17 +140,25 @@ EX-08  Une règle de détection DOIT être créée uniquement à partir d'un nom
        Preuve : tests/test_domain.py::test_factory_rejects_unknown_rule
                 tests/test_j1_group.py::test_abuse_unknown_rule_name_rejected
                 tests/test_j1_group.py::test_abuse_bad_threshold_rejected
+
+EX-09  (ajout J2) Toute entrée du flux de menaces DOIT être traduite par la couche
+       anti-corruption en un indicateur dont l'IP est valide et le score compris entre 0 et 100 ;
+       une entrée sans IP valide ou avec un niveau de risque inconnu DOIT être rejetée.
+       Menace : T sur TB7 · Propriété : Intégrité
+       Preuve : tests/test_adapters.py::test_anti_corruption_layer_translates_and_rejects
+                tests/test_j2_group.py::test_abuse_threat_feed_rejects
 ```
 
 ### Suivi
 
-| Exigence | STRIDE | Statut fin J1 |
-|---|---|---|
-| EX-01 | S | test écrit (J2 : `agent_api` à implémenter) |
-| EX-02 | D | ✅ `test_abuse_parser_rejects` vert ; test de performance J2 |
-| EX-03 | T | ✅ vert |
-| EX-04 | T, I | ✅ vert (`test_j1_group`) ; test J2 en attente |
-| EX-05 | I | ✅ vert (`test_j1_group`) ; tests J2 en attente |
-| EX-06 | E | test écrit (J2 : `IncidentService` à implémenter) |
-| EX-07 | R | ✅ machine à états verte ; audit J2 |
-| EX-08 | T, E | ✅ vert |
+| Exigence | STRIDE | Statut fin J1 | Statut fin J2 |
+|---|---|---|---|
+| EX-01 | S | test écrit, code à faire | ✅ vert |
+| EX-02 | D | ✅ en partie | ✅ vert (performance comprise) |
+| EX-03 | T | ✅ vert | ✅ vert |
+| EX-04 | T, I | ✅ en partie | ✅ vert |
+| EX-05 | I | ✅ en partie | ✅ vert |
+| EX-06 | E | test écrit, code à faire | ✅ vert |
+| EX-07 | R | ✅ machine à états | ✅ vert (audit compris) |
+| EX-08 | T, E | ✅ vert | ✅ vert |
+| EX-09 | T | — | ✅ vert |
