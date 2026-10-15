@@ -104,11 +104,32 @@ package "adapters.outbound" {
   }
 }
 
-class QueenBee <<Facade>> {
-  rejected : int
-  ingest_lines(lines)
-  ingest_agent_messages(messages)
-  move_incident(who, id, to)
+package "démarrage (bootstrap, config, factories)" {
+  class QueenBee <<Facade>> {
+    rejected : int
+    ingest_lines(lines)
+    ingest_agent_messages(messages)
+    move_incident(who, id, to)
+    open_incidents()
+  }
+  class build_app << (F,#FFD27F) composition root >>
+  class SettingsBuilder <<Builder>> {
+    hmac_key(key)
+    db_path(path)
+    bf_threshold(n)
+    build() : Settings
+  }
+  class Settings <<frozen>> {
+    - hmac_key : bytes (jamais affichée)
+    db_path : str
+    bf_threshold : int
+  }
+  interface ComponentFactory <<Abstract Factory>> {
+    repository() : IncidentRepository
+    notifier() : Notifier
+  }
+  class ProdFactory
+  class InMemoryFactory
 }
 
 ' --- domaine
@@ -148,6 +169,14 @@ parse_agent_message ..> SecurityEvent : produit
 ThreatFeedTranslator ..> ThreatIndicator : traduit
 
 ' --- démarrage
+SettingsBuilder ..> Settings : build()
+build_app ..> Settings : lit
+build_app ..> ComponentFactory : choisit
+build_app ..> QueenBee : assemble
+ComponentFactory <|.. ProdFactory
+ComponentFactory <|.. InMemoryFactory
+ProdFactory ..> SqliteIncidentRepository : crée
+InMemoryFactory ..> InMemoryIncidentRepository : crée
 QueenBee --> DetectionService
 QueenBee --> IncidentService
 QueenBee ..> parse_sshd_line
