@@ -61,8 +61,8 @@ def is_valid_username(name: str) -> bool:
 
 
 def find_incidents(ip: str):
-    # FAILLE-4 : injection SQL (f-string)
-    return conn.execute(f"SELECT * FROM incident WHERE ip = '{ip}'").fetchall()
+    # CORRECTIF-4 : requête paramétrée ; « x' OR '1'='1 » est cherché comme une IP, pas exécuté.
+    return conn.execute("SELECT * FROM incident WHERE ip = ?", (ip,)).fetchall()
 
 
 def close_incident(user: str, incident_id: int) -> None:

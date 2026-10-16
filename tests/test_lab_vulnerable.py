@@ -46,6 +46,8 @@ def test_faille2_corrigee_redos_cost_stays_linear() -> None:
     assert vuln.is_valid_username("jean dupont")  # les noms légitimes passent toujours
 
 
-def test_faille4_sql_injection_dumps_table() -> None:
+def test_faille4_corrigee_sql_injection_returns_nothing() -> None:
     vuln.conn.execute("INSERT INTO incident (ip, status) VALUES ('10.0.0.1', 'open')")
-    assert vuln.find_incidents("x' OR '1'='1")  # renvoie TOUTES les lignes
+    # Preuve d'origine : « x' OR '1'='1 » renvoyait TOUTES les lignes de la table.
+    assert vuln.find_incidents("x' OR '1'='1") == []
+    assert vuln.find_incidents("10.0.0.1")  # une vraie recherche fonctionne toujours
