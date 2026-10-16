@@ -25,7 +25,10 @@ def load_service_key(service: str, env: Mapping[str, str] | None = None) -> str:
     return key
 
 
-USER_RE = re.compile(r"^([a-zA-Z0-9]+\s?)*$")       # FAILLE-2 : quantificateurs imbriqués -> ReDoS
+# CORRECTIF-2 : plus de quantificateurs imbriqués (le séparateur est obligatoire entre deux mots,
+# donc une seule façon de découper la chaîne), et la longueur est bornée AVANT la regex.
+USER_RE = re.compile(r"[A-Za-z0-9]+(?: [A-Za-z0-9]+)*")
+MAX_USERNAME = 32
 
 conn = sqlite3.connect(":memory:")
 conn.execute("CREATE TABLE incident (id INTEGER PRIMARY KEY, ip TEXT, status TEXT)")
@@ -36,7 +39,9 @@ def receive_agent_message(raw: bytes):
 
 
 def is_valid_username(name: str) -> bool:
-    return USER_RE.match(name) is not None
+    if not isinstance(name, str) or len(name) > MAX_USERNAME:
+        return False
+    return USER_RE.fullmatch(name) is not None
 
 
 def find_incidents(ip: str):

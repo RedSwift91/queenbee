@@ -1,6 +1,7 @@
 """Jour 3 — démonstrations d'exploitation SUR LA VARIANTE DE LABORATOIRE (labs/).
 
 Chaque test PROUVE la faille. Après correction, l'étudiant inverse l'assertion.
+Les tests nommés « _corrigee_ » ont été inversés : ils prouvent maintenant que l'attaque est refusée.
 """
 
 import pickle
@@ -22,13 +23,14 @@ def test_faille3_pickle_executes_code_on_load(capsys: pytest.CaptureFixture[str]
     assert "PWNED" in capsys.readouterr().out  # la simple lecture a exécuté du code
 
 
-def test_faille2_redos_is_exponential() -> None:
-    def cost(n: int) -> float:
-        t = time.perf_counter()
-        vuln.is_valid_username("a" * n + "!")
-        return time.perf_counter() - t
-
-    assert cost(22) > 4 * cost(18)  # +4 caractères => temps x16 en théorie
+def test_faille2_corrigee_redos_cost_stays_linear() -> None:
+    # Preuve d'origine : assert cost(22) > 4 * cost(18), le temps explosait avec la longueur.
+    start = time.perf_counter()
+    for n in (18, 22, 10_000):
+        for _ in range(1_000):
+            assert not vuln.is_valid_username("a" * n + "!")
+    assert time.perf_counter() - start < 0.5  # 3 000 entrées piégées, même très longues
+    assert vuln.is_valid_username("jean dupont")  # les noms légitimes passent toujours
 
 
 def test_faille4_sql_injection_dumps_table() -> None:
