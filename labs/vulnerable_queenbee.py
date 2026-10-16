@@ -4,11 +4,26 @@
 Sept failles d'architecture à exploiter (en local), corriger, puis vérifier avec bandit/pip-audit.
 Chaque faille porte un numéro FAILLE-n ; la correction de référence est dans src/queenbee.
 """
+import os
 import pickle
 import re
 import sqlite3
+from collections.abc import Mapping
 
-API_KEY = "qb-admin-2026"                           # FAILLE-1 : secret en dur et partagé par tous les services
+from queenbee.domain.model import DomainError
+
+MIN_KEY_LEN = 32
+
+
+def load_service_key(service: str, env: Mapping[str, str] | None = None) -> str:
+    # CORRECTIF-1 : une clé par service (QUEENBEE_<SERVICE>_KEY), injectée au démarrage,
+    # jamais écrite dans le code et sans valeur par défaut.
+    env = os.environ if env is None else env
+    key = env.get(f"QUEENBEE_{service.upper()}_KEY", "")
+    if len(key) < MIN_KEY_LEN:
+        raise DomainError(f"clé du service {service} absente ou trop courte")
+    return key
+
 
 USER_RE = re.compile(r"^([a-zA-Z0-9]+\s?)*$")       # FAILLE-2 : quantificateurs imbriqués -> ReDoS
 
@@ -39,5 +54,6 @@ def call_enrichment_service(ip: str) -> dict:
     return {"ip": ip, "reputation": "unknown"}
 
 
-def check_token(token: str) -> bool:
-    return token == API_KEY                           # FAILLE-7 : comparaison non constante (timing)
+def check_token(token: str, expected: str) -> bool:
+    # La clé attendue est fournie par load_service_key (CORRECTIF-1).
+    return token == expected                          # FAILLE-7 : comparaison non constante (timing)

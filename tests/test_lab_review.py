@@ -9,14 +9,27 @@ import inspect
 import pytest
 
 from labs import vulnerable_queenbee as vuln
+from queenbee.domain.model import DomainError
 
 pytestmark = pytest.mark.lab
 
 
-def test_faille1_hardcoded_shared_secret_grants_access() -> None:
-    # La clé est écrite dans le code, donc dans Git : quiconque lit le dépôt obtient l'accès.
-    assert "qb-admin-2026" in inspect.getsource(vuln)
-    assert vuln.check_token("qb-admin-2026")
+KEY_A, KEY_B = "a" * 64, "b" * 64
+
+
+def test_faille1_corrigee_no_hardcoded_secret_one_key_per_service() -> None:
+    # Avant : la clé « qb-admin-2026 » était écrite dans le code et donnait l'accès à tous.
+    assert "qb-admin-2026" not in inspect.getsource(vuln)
+    env = {"QUEENBEE_INGEST_KEY": KEY_A, "QUEENBEE_ENRICH_KEY": KEY_B}
+    ingest, enrich = vuln.load_service_key("ingest", env), vuln.load_service_key("enrich", env)
+    assert ingest != enrich  # une clé par service : en voler une n'ouvre pas les autres
+    assert not vuln.check_token("qb-admin-2026", ingest)
+
+
+@pytest.mark.parametrize("env", [{}, {"QUEENBEE_INGEST_KEY": ""}, {"QUEENBEE_INGEST_KEY": "court"}])
+def test_faille1_corrigee_missing_or_short_key_refuses_to_start(env: dict[str, str]) -> None:
+    with pytest.raises(DomainError):
+        vuln.load_service_key("ingest", env)  # aucune valeur par défaut
 
 
 def test_faille5_anyone_can_close_an_incident() -> None:
@@ -43,5 +56,5 @@ def test_faille7_token_comparison_is_not_constant_time() -> None:
             compared.append(other)  # « == » s'arrête au premier caractère différent :
             return str.__eq__(self, other)  # son temps de réponse révèle la clé
 
-    vuln.check_token(SpyToken("qb-admin-2025"))
+    vuln.check_token(SpyToken(KEY_B), KEY_A)
     assert compared  # la clé a bien été comparée avec « == »
