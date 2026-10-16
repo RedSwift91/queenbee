@@ -4,8 +4,8 @@
 Sept failles d'architecture à exploiter (en local), corriger, puis vérifier avec bandit/pip-audit.
 Chaque faille porte un numéro FAILLE-n ; la correction de référence est dans src/queenbee.
 """
+import json
 import os
-import pickle
 import re
 import sqlite3
 from collections.abc import Mapping
@@ -34,8 +34,24 @@ conn = sqlite3.connect(":memory:")
 conn.execute("CREATE TABLE incident (id INTEGER PRIMARY KEY, ip TEXT, status TEXT)")
 
 
-def receive_agent_message(raw: bytes):
-    return pickle.loads(raw)                          # FAILLE-3 : désérialisation non sûre (RCE)
+MAX_MESSAGE = 4096
+_FIELDS = frozenset({"source_ip", "username", "action", "timestamp"})
+
+
+def receive_agent_message(raw: bytes) -> dict[str, str]:
+    # CORRECTIF-3 : on accepte des DONNÉES (JSON), jamais du code. pickle.loads exécutait ce que
+    # l'expéditeur voulait pendant la simple lecture. Taille bornée, puis schéma strict.
+    if not isinstance(raw, bytes) or len(raw) > MAX_MESSAGE:
+        raise DomainError("message absent ou trop gros")
+    try:
+        data = json.loads(raw)
+    except (ValueError, RecursionError) as exc:  # JSON invalide, ou octets non UTF-8
+        raise DomainError("message illisible") from exc
+    if not isinstance(data, dict) or set(data) != _FIELDS:
+        raise DomainError("champs inattendus ou manquants")
+    if not all(isinstance(v, str) for v in data.values()):
+        raise DomainError("tous les champs doivent être du texte")
+    return data
 
 
 def is_valid_username(name: str) -> bool:

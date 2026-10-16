@@ -1,7 +1,7 @@
 """Jour 3 — démonstrations d'exploitation SUR LA VARIANTE DE LABORATOIRE (labs/).
 
 Chaque test PROUVE la faille. Après correction, l'étudiant inverse l'assertion.
-Les tests nommés « _corrigee_ » ont été inversés : ils prouvent maintenant que l'attaque est refusée.
+Les tests nommés « _corrigee_ » ont été inversés : ils prouvent désormais que l'attaque échoue.
 """
 
 import pickle
@@ -10,17 +10,30 @@ import time
 import pytest
 
 from labs import vulnerable_queenbee as vuln
+from queenbee.domain.model import DomainError
 
 pytestmark = pytest.mark.lab
 
 
-def test_faille3_pickle_executes_code_on_load(capsys: pytest.CaptureFixture[str]) -> None:
+def test_faille3_corrigee_pickle_payload_is_refused(capsys: pytest.CaptureFixture[str]) -> None:
     class Payload:  # charge utile INOFFENSIVE : un simple print
         def __reduce__(self) -> tuple[object, tuple[str]]:
             return (print, ("PWNED: code exécuté pendant la désérialisation",))
 
-    vuln.receive_agent_message(pickle.dumps(Payload()))
-    assert "PWNED" in capsys.readouterr().out  # la simple lecture a exécuté du code
+    # Preuve d'origine : la lecture affichait « PWNED », du code avait été exécuté.
+    with pytest.raises(DomainError):
+        vuln.receive_agent_message(pickle.dumps(Payload()))
+    assert "PWNED" not in capsys.readouterr().out  # aucun code exécuté
+
+
+def test_faille3_corrigee_valid_json_message_is_accepted() -> None:
+    body = (
+        b'{"source_ip": "10.0.0.66", "username": "root", "action": "login_failed", '
+        b'"timestamp": "2026-10-16T09:00:00+00:00"}'
+    )
+    assert vuln.receive_agent_message(body)["username"] == "root"
+    with pytest.raises(DomainError):
+        vuln.receive_agent_message(body.replace(b'"root"', b'"root", "is_admin": "true"'))
 
 
 def test_faille2_corrigee_redos_cost_stays_linear() -> None:
