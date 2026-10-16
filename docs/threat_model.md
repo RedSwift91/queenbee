@@ -162,3 +162,26 @@ EX-09  (ajout J2) Toute entrée du flux de menaces DOIT être traduite par la co
 | EX-07 | R | ✅ machine à états | ✅ vert (audit compris) |
 | EX-08 | T, E | ✅ vert | ✅ vert |
 | EX-09 | T | — | ✅ vert |
+
+## 6. Revue de sécurité de la variante de laboratoire (ajout J3)
+
+La variante `labs/vulnerable_queenbee.py` contenait sept failles. Chacune a suivi la même démarche :
+un test qui **prouve** la faille, une correction **dans la couche où elle est née**, puis le même
+test **inversé** en test de non-régression, et un ADR court.
+
+| # | Faille | Couche | STRIDE | DICP | Correction | Test de non-régression | ADR |
+|---|---|---|---|---|---|---|---|
+| 1 | Secret en dur, partagé par tous les services | configuration | S, I | C | une clé par service, lue dans l'environnement, sans valeur par défaut | `test_faille1_corrigee_*` | 0002 |
+| 2 | Regex à retour arrière exponentiel (ReDoS) | adaptateur | D | D | longueur bornée avant la regex, motif sans répétition imbriquée | `test_faille2_corrigee_redos_cost_stays_linear` | 0003 |
+| 3 | Désérialisation `pickle` (exécution de code) | adaptateur | T, E | I | `json.loads`, taille bornée, schéma strict | `test_faille3_corrigee_*` | 0004 |
+| 4 | Requête SQL construite par f-string | persistance | T, I | I, C | requête paramétrée | `test_faille4_corrigee_sql_injection_returns_nothing` | 0005 |
+| 5 | Aucune autorisation dans le service | application | E, R | I, P | rôle analyste exigé en première étape du cas d'usage, refus audité | `test_faille5_corrigee_viewer_cannot_close_an_incident` | 0006 |
+| 6 | Services qui ne s'authentifient pas | infrastructure | S, T | I | authentification mutuelle (requête et réponse signées) ; mTLS en production | `test_faille6_corrigee_*` | 0007 |
+| 7 | Comparaison de jeton non constante | sécurité | I, S | C | `hmac.compare_digest` | `test_faille7_corrigee_token_is_compared_in_constant_time` | 0008 |
+
+Vérification après correction : `python -m pytest -m lab` → 14 tests verts ; `bandit -r labs` → aucune
+alerte (deux alertes de niveau moyen avant correction : `pickle` et SQL par f-string).
+
+**Secret résiduel dans l'historique.** La clé `qb-admin-2026` de la faille 1 reste visible dans le
+premier commit : un historique Git ne s'efface pas réellement. Cette clé de laboratoire n'a jamais
+protégé aucun système ; elle est considérée comme révoquée et ne doit être réutilisée nulle part.
