@@ -1,0 +1,63 @@
+@startuml c4_component
+!include <C4/C4_Component>
+title Queen Bee — Composants du cœur (C4 niveau 3) : ports, adaptateurs, cas d'usage
+LAYOUT_TOP_DOWN()
+
+System_Ext(agent, "Agents", "Messages signés")
+Person(analyst, "Analyste SOC")
+ContainerDb(db, "Base des incidents", "SQL")
+System_Ext(mail, "Messagerie du SOC")
+System_Ext(fw, "Pare-feu")
+System_Ext(feed, "Flux de menaces")
+
+Container_Boundary(core, "Cœur Queen Bee") {
+  Component(facade, "QueenBee", "Facade", "Point d'entrée unique ; compte les rejets")
+  Component(boot, "build_app", "Composition root", "Crée et branche tous les objets")
+
+  Boundary(inbound, "Adaptateurs d'entrée") {
+    Component(agentapi, "parse_agent_message", "Adapter", "Taille, HMAC en temps constant, schéma strict")
+    Component(logparser, "parse_sshd_line", "Adapter", "Ligne bornée, regex ancrée")
+    Component(acl, "ThreatFeedTranslator", "Anti-corruption", "Traduit le flux externe en ThreatIndicator")
+  }
+
+  Boundary(app, "Application") {
+    Component(detect, "DetectionService", "Cas d'usage", "Évalue les règles, ouvre les incidents")
+    Component(incsvc, "IncidentService", "Cas d'usage", "Autoriser, vérifier, règle métier, persister")
+    Component(proxy, "IncidentReadProxy", "Proxy", "Lecture réservée aux rôles autorisés")
+    Component(ports, "Ports", "Protocol", "IncidentRepository, Notifier, Firewall")
+  }
+
+  Boundary(domain, "Domaine") {
+    Component(model, "Modèle", "frozen dataclasses", "SecurityEvent, Alert, Incident (State), Principal")
+    Component(rules, "Règles", "Strategy + Composite", "BruteForceRule, PortScanRule, RuleSet, build_rule")
+  }
+
+  Boundary(outbound, "Adaptateurs de sortie") {
+    Component(repo, "SqliteIncidentRepository", "Adapter", "Requêtes paramétrées")
+    Component(notif, "AuditedNotifier + RateLimitedNotifier", "Decorators", "Audit, 3 alertes par minute")
+    Component(cmd, "BlockIpCommand", "Command", "IP validée, tracée, annulable")
+  }
+}
+
+Rel(agent, agentapi, "corps + signature")
+Rel(analyst, facade, "consulter, trier, clore")
+Rel(feed, acl, "indicateurs")
+Rel(agentapi, facade, "SecurityEvent")
+Rel(logparser, facade, "SecurityEvent")
+Rel(facade, detect, "ingest")
+Rel(facade, incsvc, "move")
+Rel(detect, rules, "evaluate")
+Rel(detect, ports, "utilise")
+Rel(incsvc, ports, "utilise")
+Rel(incsvc, model, "transition_to")
+Rel(proxy, ports, "délègue")
+Rel(repo, ports, "implémente")
+Rel(notif, ports, "implémente")
+Rel(cmd, ports, "utilise Firewall")
+Rel(repo, db, "SQL paramétré")
+Rel(notif, mail, "alertes")
+Rel(cmd, fw, "bloquer / débloquer")
+Rel(boot, facade, "assemble")
+
+SHOW_LEGEND()
+@enduml
