@@ -5,6 +5,7 @@ faille ; une fois la faille corrigée, il est inversé pour devenir un test de n
 """
 
 import inspect
+from collections.abc import Mapping
 
 import pytest
 
@@ -50,11 +51,33 @@ def test_faille5_corrigee_viewer_cannot_close_an_incident() -> None:
     assert _status(cur.lastrowid) == "closed"
 
 
-def test_faille6_inter_service_call_is_not_authenticated() -> None:
-    # Aucun secret n'est présenté ni vérifié : n'importe qui peut appeler le service, et
-    # n'importe qui peut se faire passer pour lui.
-    assert list(inspect.signature(vuln.call_enrichment_service).parameters) == ["ip"]
-    assert vuln.call_enrichment_service("10.0.0.1")["reputation"] == "unknown"
+def _real_service(request: Mapping[str, str]) -> Mapping[str, str]:
+    return vuln.enrichment_service(request, KEY_A)
+
+
+def test_faille6_corrigee_mutual_authentication_between_services() -> None:
+    # Preuve d'origine : call_enrichment_service(ip) n'attendait et ne vérifiait aucun secret.
+    assert vuln.call_enrichment_service("10.0.0.1", KEY_A, _real_service)["reputation"] == "unknown"
+
+
+def test_faille6_corrigee_unknown_client_is_refused() -> None:
+    with pytest.raises(vuln.UnauthenticatedError):  # le client n'a pas la bonne clé
+        vuln.call_enrichment_service("10.0.0.1", KEY_B, _real_service)
+    with pytest.raises(vuln.UnauthenticatedError):  # requête sans aucune signature
+        vuln.enrichment_service({"ip": "10.0.0.1"}, KEY_A)
+
+
+def test_faille6_corrigee_impostor_service_is_refused() -> None:
+    def impostor(request: Mapping[str, str]) -> Mapping[str, str]:
+        return {"ip": request["ip"], "reputation": "clean"}  # réponse forgée, non signée
+
+    with pytest.raises(vuln.UnauthenticatedError):
+        vuln.call_enrichment_service("10.0.0.1", KEY_A, impostor)
+
+
+def test_faille6_corrigee_ip_is_validated() -> None:
+    with pytest.raises(ValueError, match="does not appear"):
+        vuln.call_enrichment_service("10.0.0.1; rm -rf /", KEY_A, _real_service)
 
 
 def test_faille7_token_comparison_is_not_constant_time() -> None:

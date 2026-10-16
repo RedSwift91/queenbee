@@ -4,11 +4,14 @@
 Sept failles d'architecture à exploiter (en local), corriger, puis vérifier avec bandit/pip-audit.
 Chaque faille porte un numéro FAILLE-n ; la correction de référence est dans src/queenbee.
 """
+import hashlib
+import hmac
+import ipaddress
 import json
 import os
 import re
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from queenbee.application.access import ANALYST, require
 from queenbee.domain.model import DomainError, Principal
@@ -73,9 +76,46 @@ def close_incident(who: Principal, incident_id: int) -> None:
     conn.execute("UPDATE incident SET status='closed' WHERE id=?", (incident_id,))
 
 
-def call_enrichment_service(ip: str) -> dict:
-    # FAILLE-6 : appel inter-services sans authentification mutuelle (ni mTLS, ni jeton)
-    return {"ip": ip, "reputation": "unknown"}
+# CORRECTIF-6 : authentification MUTUELLE des appels inter-services. Le client signe sa requête,
+# le service la vérifie puis signe sa réponse, que le client vérifie à son tour. En production,
+# le même rôle est tenu par mTLS (un certificat de chaque côté) ; la clé est propre à ce lien.
+class UnauthenticatedError(Exception):
+    """L'autre partie n'a pas prouvé son identité."""
+
+
+def _sign(payload: Mapping[str, str], key: str) -> str:
+    body = json.dumps(dict(payload), sort_keys=True).encode()
+    return hmac.new(key.encode(), body, hashlib.sha256).hexdigest()
+
+
+def _signed_by(message: Mapping[str, str], key: str) -> bool:
+    received = message.get("sig")
+    content = {k: v for k, v in message.items() if k != "sig"}
+    return isinstance(received, str) and hmac.compare_digest(
+        _sign(content, key).encode(), received.encode()
+    )
+
+
+def enrichment_service(request: Mapping[str, str], key: str) -> dict[str, str]:
+    """Côté service : refuse tout client non authentifié, puis signe sa réponse."""
+    if not _signed_by(request, key):
+        raise UnauthenticatedError("client non authentifié")
+    response = {"ip": request["ip"], "reputation": "unknown"}
+    return response | {"sig": _sign(response, key)}
+
+
+def call_enrichment_service(
+    ip: str, key: str, transport: Callable[[Mapping[str, str]], Mapping[str, str]]
+) -> dict[str, str]:
+    """Côté client : signe la requête et n'accepte qu'une réponse signée par le vrai service."""
+    if not isinstance(ip, str):
+        raise DomainError("adresse IP attendue sous forme de texte")
+    ipaddress.ip_address(ip)  # ValueError si ce n'est pas une IP
+    request = {"ip": ip}
+    response = transport(request | {"sig": _sign(request, key)})
+    if not _signed_by(response, key):
+        raise UnauthenticatedError("le service n'a pas prouvé son identité")
+    return {k: v for k, v in response.items() if k != "sig"}
 
 
 def check_token(token: str, expected: str) -> bool:
