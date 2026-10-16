@@ -1,9 +1,13 @@
-# ruff: noqa
-"""VARIANTE VOLONTAIREMENT FRAGILE de Queen Bee — usage LABORATOIRE uniquement (J3-A1).
+"""Variante de LABORATOIRE de Queen Bee (J3-A1) — usage local uniquement, jamais déployée.
 
-Sept failles d'architecture à exploiter (en local), corriger, puis vérifier avec bandit/pip-audit.
-Chaque faille porte un numéro FAILLE-n ; la correction de référence est dans src/queenbee.
+À l'origine volontairement fragile : sept failles d'architecture (FAILLE-1 à FAILLE-7). Chacune a
+été prouvée par un test, corrigée dans la couche où elle était née (repères CORRECTIF-n), puis le
+test a été inversé en test de non-régression : tests/test_lab_vulnerable.py et test_lab_review.py.
+La décision de chaque correction est tracée dans docs/adr/0002 à 0008.
 """
+
+from __future__ import annotations
+
 import hashlib
 import hmac
 import ipaddress
@@ -64,7 +68,7 @@ def is_valid_username(name: str) -> bool:
     return USER_RE.fullmatch(name) is not None
 
 
-def find_incidents(ip: str):
+def find_incidents(ip: str) -> list[tuple[int, str, str]]:
     # CORRECTIF-4 : requête paramétrée ; « x' OR '1'='1 » est cherché comme une IP, pas exécuté.
     return conn.execute("SELECT * FROM incident WHERE ip = ?", (ip,)).fetchall()
 
