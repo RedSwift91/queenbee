@@ -2,6 +2,12 @@
 
 **ITIS MAST CYBER 4 · ITIS MAST DEV 4** — tronc commun, 14, 15 et 16 octobre 2026
 
+Contributeurs du projet:
+- MORVAN Killian
+- KILANI Ahmed
+- TCHITOMBI Laura
+- BOKO ASSOGBA Junel
+
 Mini-plateforme de détection : des **agents** (« abeilles ») remontent des événements de sécurité,
 la **reine** les valide, détecte (règles), ouvre des **incidents** et alerte les analystes du SOC.
 
