@@ -1,10 +1,57 @@
 @startuml c4_container
 !include <C4/C4_Container>
-title Queen Bee — Conteneurs et frontières de confiance (C4 niveau 2, à compléter)
-' 1. Acteurs : Person(...) et System_Ext(...)
-' 2. Une Boundary(...) par zone de confiance (TB1, TB2...)
-' 3. Container(...) / ContainerDb(...) dans chaque zone
-' 4. Rel(source, destination, "quoi", "protocole") pour chaque flux de la matrice
-Person(analyst, "Analyste SOC")
-System_Ext(agent, "Agent (abeille)", "Collecte les logs sur les hôtes")
+title Queen Bee — Conteneurs et zones de confiance (C4 niveau 2, infrastructure cible)
+LAYOUT_TOP_DOWN()
+
+Person(analyst, "Analyste SOC", "Poste interne, authentification MFA")
+Person(admin, "Administrateur", "Passe obligatoirement par le bastion")
+
+Boundary(z0, "Z0 · Zone non fiable (hôtes surveillés, Internet)") {
+  System_Ext(agent, "Agents (abeilles)", "Lisent les journaux sshd")
+  System_Ext(feed, "Fournisseur de flux de menaces", "Indicateurs d'IP malveillantes")
+}
+
+Boundary(z1, "Z1 · DMZ d'ingestion") {
+  Container(api, "API d'ingestion", "Python", "parse_agent_message : taille, HMAC, schéma strict")
+  Container(proxy, "Proxy sortant", "HTTPS", "Seule sortie vers Internet, liste blanche de domaines")
+}
+
+Boundary(z2, "Z2 · Zone applicative") {
+  Container(core, "Cœur Queen Bee", "Python, hexagonal", "Détection, incidents, API des analystes (Facade QueenBee)")
+  Container(enrich, "Service d'enrichissement", "Python", "Réputation des IP, appels authentifiés (ADR 0007)")
+}
+
+Boundary(z3, "Z3 · Zone données") {
+  ContainerDb(db, "Base des incidents", "SQL", "Compte applicatif sans droit de suppression de table")
+}
+
+Boundary(z4, "Z4 · Zone sécurité") {
+  ContainerDb(siem, "Collecteur de journaux / SIEM", "syslog", "Écriture seule, stockage immuable 1 an")
+  ContainerDb(backup, "Sauvegardes", "3-2-1", "Une copie hors site immuable")
+}
+
+Boundary(z5, "Z5 · Zone d'administration") {
+  Container(bastion, "Bastion", "SSH + MFA", "Unique point d'entrée d'administration, sessions enregistrées")
+  Container(vault, "Coffre à secrets", "HTTPS mTLS", "Clés et identités par service")
+}
+
+System_Ext(fw, "Pare-feu périmétrique", "Bloque les IP sur décision d'un analyste")
+System_Ext(mail, "Messagerie du SOC", "Reçoit les alertes")
+
+Rel(agent, api, "F1 · événements signés", "HTTPS 443, TLS 1.3")
+Rel(api, core, "F2 · SecurityEvent validés", "HTTPS 8443, mTLS")
+Rel(core, db, "F3 · incidents", "SQL 5432, TLS")
+Rel(analyst, core, "F4 · consulter, trier, clore", "HTTPS 443 + MFA")
+Rel(core, enrich, "F5 · réputation d'une IP", "HTTPS 8444, requête et réponse signées")
+Rel(core, proxy, "F6a · flux de menaces", "HTTPS 3128")
+Rel(proxy, feed, "F6b · flux de menaces", "HTTPS 443, domaine du fournisseur seul")
+Rel(core, fw, "F7 · bloquer / débloquer une IP validée", "HTTPS 443, compte dédié")
+Rel(core, mail, "F8 · alertes limitées", "SMTP 587, STARTTLS")
+Rel(core, siem, "F9 · journaux et audit", "syslog 6514, TLS, écriture seule")
+Rel(backup, db, "F10 · sauvegarde tirée", "TLS, compte de lecture")
+Rel(admin, bastion, "F11a · administration", "SSH 22 + MFA")
+Rel(bastion, core, "F11b · maintenance", "SSH 22")
+Rel(core, vault, "F12 · secrets au démarrage", "HTTPS 8200, mTLS")
+
+SHOW_LEGEND()
 @enduml
