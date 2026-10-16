@@ -1,0 +1,4 @@
+# Faux positifs gitleaks, vérifiés à la main (16/10/2026).
+# .env.example ligne 2 : « QUEENBEE_AGENT_KEY= » est VIDE (modèle à copier en .env) ; la règle
+# generic-api-key a pris la ligne suivante « QUEENBEE_DB=queenbee.db » pour une valeur. Aucun secret.
+62b7a7d9b64c374e84e6302e3be8cbf0ce64cd41:.env.example:generic-api-key:2
