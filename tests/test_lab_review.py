@@ -80,7 +80,7 @@ def test_faille6_corrigee_ip_is_validated() -> None:
         vuln.call_enrichment_service("10.0.0.1; rm -rf /", KEY_A, _real_service)
 
 
-def test_faille7_token_comparison_is_not_constant_time() -> None:
+def test_faille7_corrigee_token_is_compared_in_constant_time() -> None:
     compared: list[object] = []
 
     class SpyToken(str):
@@ -90,5 +90,8 @@ def test_faille7_token_comparison_is_not_constant_time() -> None:
             compared.append(other)  # « == » s'arrête au premier caractère différent :
             return str.__eq__(self, other)  # son temps de réponse révèle la clé
 
-    vuln.check_token(SpyToken(KEY_B), KEY_A)
-    assert compared  # la clé a bien été comparée avec « == »
+    # Preuve d'origine : « compared » n'était pas vide, la clé passait par « == ».
+    assert not vuln.check_token(SpyToken(KEY_B), KEY_A)
+    assert compared == []  # hmac.compare_digest ne s'arrête jamais en route
+    assert vuln.check_token(KEY_A, KEY_A)
+    assert not vuln.check_token(None, KEY_A)  # type: ignore[arg-type]

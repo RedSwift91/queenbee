@@ -120,4 +120,8 @@ def call_enrichment_service(
 
 def check_token(token: str, expected: str) -> bool:
     # La clé attendue est fournie par load_service_key (CORRECTIF-1).
-    return token == expected                          # FAILLE-7 : comparaison non constante (timing)
+    # CORRECTIF-7 : comparaison en temps constant. « == » s'arrêtait au premier caractère différent,
+    # et le temps de réponse révélait la clé caractère par caractère.
+    if not isinstance(token, str):
+        return False
+    return hmac.compare_digest(token.encode(), expected.encode())
