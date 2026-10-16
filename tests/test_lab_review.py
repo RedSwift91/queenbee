@@ -9,7 +9,8 @@ import inspect
 import pytest
 
 from labs import vulnerable_queenbee as vuln
-from queenbee.domain.model import DomainError
+from queenbee.application.access import AccessDeniedError
+from queenbee.domain.model import DomainError, Principal
 
 pytestmark = pytest.mark.lab
 
@@ -32,11 +33,21 @@ def test_faille1_corrigee_missing_or_short_key_refuses_to_start(env: dict[str, s
         vuln.load_service_key("ingest", env)  # aucune valeur par défaut
 
 
-def test_faille5_anyone_can_close_an_incident() -> None:
+def _status(incident_id: int) -> str:
+    row = vuln.conn.execute("SELECT status FROM incident WHERE id = ?", (incident_id,)).fetchone()
+    return str(row[0])
+
+
+def test_faille5_corrigee_viewer_cannot_close_an_incident() -> None:
     cur = vuln.conn.execute("INSERT INTO incident (ip, status) VALUES ('10.0.0.5', 'open')")
-    vuln.close_incident("mallory", cur.lastrowid)  # un simple lecteur, sans aucun rôle
-    status = vuln.conn.execute("SELECT status FROM incident WHERE id = ?", (cur.lastrowid,))
-    assert status.fetchone() == ("closed",)
+    assert cur.lastrowid is not None
+    # Preuve d'origine : close_incident("mallory", id) passait l'incident à « closed ».
+    for intruder in (Principal("mallory", frozenset({"viewer"})), Principal("guest")):
+        with pytest.raises(AccessDeniedError):
+            vuln.close_incident(intruder, cur.lastrowid)
+    assert _status(cur.lastrowid) == "open"  # aucun effet de bord
+    vuln.close_incident(Principal("alice", frozenset({"analyst"})), cur.lastrowid)
+    assert _status(cur.lastrowid) == "closed"
 
 
 def test_faille6_inter_service_call_is_not_authenticated() -> None:

@@ -10,7 +10,8 @@ import re
 import sqlite3
 from collections.abc import Mapping
 
-from queenbee.domain.model import DomainError
+from queenbee.application.access import ANALYST, require
+from queenbee.domain.model import DomainError, Principal
 
 MIN_KEY_LEN = 32
 
@@ -65,8 +66,10 @@ def find_incidents(ip: str):
     return conn.execute("SELECT * FROM incident WHERE ip = ?", (ip,)).fetchall()
 
 
-def close_incident(user: str, incident_id: int) -> None:
-    # FAILLE-5 : aucune vérification d'autorisation dans la couche service
+def close_incident(who: Principal, incident_id: int) -> None:
+    # CORRECTIF-5 : le rôle est vérifié dans le cas d'usage, en premier, et non dans l'interface :
+    # une interface qui oublierait le contrôle ne peut pas le contourner. Le refus est audité.
+    require(who, ANALYST, "clore un incident")
     conn.execute("UPDATE incident SET status='closed' WHERE id=?", (incident_id,))
 
 
